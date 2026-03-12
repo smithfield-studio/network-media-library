@@ -19,7 +19,7 @@ This is particularly useful for multilingual multisite setups (e.g. WPML or Poly
 ## Installation
 
 ```sh
-composer require humanmade/network-media-library
+composer require smithfield-studio/network-media-library
 ```
 
 The plugin should either be installed as a mu-plugin or network activated. It cannot be activated on individual sites.
