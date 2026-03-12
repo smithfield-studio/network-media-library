@@ -1,35 +1,67 @@
 {
-  "name": "humanmade/network-media-library",
-  "type": "wordpress-plugin",
-  "description": "Network Media Library provides a central media library that's shared across all sites on the Multisite network.",
-  "keywords": ["wordpress", "plugin", "multisite"],
-  "homepage": "https://github.com/humanmade/network-media-library",
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "John Blackbourn",
-      "homepage": "https://johnblackbourn.com/",
-      "role": "Developer"
+    "name": "smithfield-studio/network-media-library",
+    "type": "wordpress-plugin",
+    "description": "Network Media Library provides a central media library that's shared across all sites on the Multisite network.",
+    "keywords": ["wordpress", "plugin", "multisite"],
+    "homepage": "https://github.com/smithfield-studio/network-media-library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Smithfield Studio",
+            "homepage": "https://smithfield.studio/",
+            "role": "Maintainer"
+        },
+        {
+            "name": "John Blackbourn",
+            "homepage": "https://johnblackbourn.com/",
+            "role": "Original Developer"
+        },
+        {
+            "name": "Dominik Schilling",
+            "homepage": "https://dominikschilling.de/",
+            "role": "Original Developer"
+        },
+        {
+            "name": "Frank Bültge",
+            "homepage": "https://bueltge.de",
+            "role": "Original Developer"
+        }
+    ],
+    "require": {
+        "php": ">=8.4",
+        "composer/installers": "^2.0"
     },
-    {
-      "name": "Dominik Schilling",
-      "homepage": "https://dominikschilling.de/",
-      "role": "Developer"
+    "require-dev": {
+        "laravel/pint": "^1.0",
+        "rector/rector": "^2.0",
+        "phpstan/phpstan": "^2.0",
+        "szepeviktor/phpstan-wordpress": "^2.0",
+        "php-stubs/acf-pro-stubs": "^6.0",
+        "phpunit/phpunit": "^11.0",
+        "yoast/phpunit-polyfills": "^3.0",
+        "php-stubs/wp-cli-stubs": "^2.12"
     },
-    {
-      "name": "Frank Bültge",
-      "homepage": "https://bueltge.de",
-      "role": "Developer"
+    "autoload": {
+        "psr-4": {
+            "Network_Media_Library\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Network_Media_Library\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "format": "pint",
+        "format:check": "pint --test",
+        "rector": "rector process",
+        "rector:dry": "rector process --dry-run",
+        "phpstan": "phpstan analyse",
+        "test": "phpunit"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true
+        }
     }
-  ],
-  "require": {
-    "php": ">=7",
-    "composer/installers": "^2.0"
-  },
-  "require-dev": {
-    "automattic/phpcs-neutron-standard": "^1.5",
-    "phpcompatibility/php-compatibility": "~8.2",
-    "squizlabs/php_codesniffer": "^3.2",
-    "wp-coding-standards/wpcs": "^1"
-  }
 }
