@@ -31,19 +31,28 @@ class AdminBar {
             return;
         }
 
-        $media_site = get_blog_details(get_site_id());
+        $site_id    = get_site_id();
+        $media_site = get_blog_details($site_id);
 
         if (!$media_site) {
             return;
         }
 
+        // Use MultilingualPress alt language title if available (e.g. "🇬🇧 English").
+        $site_name = get_blog_option($site_id, 'multilingualpress_alt_language_title');
+
+        if (empty($site_name)) {
+            $site_name = $media_site->blogname;
+        }
+
         printf(
             '<div class="notice notice-info"><p>%s <a href="%s">%s</a></p></div>',
             sprintf(
-                'Media is shared across the network from <strong>%s</strong>.',
-                esc_html($media_site->blogname),
+                'Media is shared across the network from <strong>%s</strong> (ID: %d).',
+                esc_html($site_name),
+                $site_id,
             ),
-            esc_url(get_admin_url(get_site_id(), 'upload.php')),
+            esc_url(get_admin_url($site_id, 'upload.php')),
             'View media library',
         );
     }
