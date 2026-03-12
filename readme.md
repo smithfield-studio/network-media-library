@@ -132,9 +132,11 @@ wp network-media-library verify-thumbnails --fix
 
 MIT. See [LICENSE](./LICENSE).
 
-## History
+## Credits
 
-This plugin started as a fork of the [Multisite Global Media plugin](https://github.com/bueltge/multisite-global-media) by Frank Bültge and Dominik Schilling at [Inpsyde](https://inpsyde.com/). The initial fork was made as part of a client project at [Human Made](https://humanmade.com/). This maintained fork is by [Smithfield Studio](https://smithfield.studio/).
+Maintained by [Smithfield Studio](https://smithfield.studio/).
+
+Huge thanks to [John Blackbourn](https://johnblackbourn.com/), [Dominik Schilling](https://dominikschilling.de/), and [Frank Bültge](https://bueltge.de) for creating and developing this plugin. Their original work at [Human Made](https://humanmade.com/) and [Inpsyde](https://inpsyde.com/) — building on Frank and Dominik's earlier [Multisite Global Media](https://github.com/bueltge/multisite-global-media) plugin — made all of this possible.
 
 ## Alternatives
 
