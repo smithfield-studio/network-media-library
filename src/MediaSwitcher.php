@@ -79,9 +79,23 @@ class MediaSwitcher {
         add_action('xmlrpc_call', $self->handleXmlrpcCall(...), 0);
 
         // Content image responsive handling.
-        // Fix 3a: Remove wp_filter_content_tags (not the old wp_make_content_images_responsive).
+        // Remove WP's default filter and replace with ours that switches to the media site.
         remove_filter('the_content', 'wp_filter_content_tags');
         add_filter('the_content', $self->makeContentImagesResponsive(...));
+
+        // Attachment URL — themes/plugins calling wp_get_attachment_url() directly.
+        add_filter('wp_get_attachment_url', $self->filterAttachmentUrl(...), 999, 2);
+
+        // Attachment metadata — themes/plugins calling wp_get_attachment_metadata() directly.
+        add_filter('wp_get_attachment_metadata', $self->filterAttachmentMetadata(...), 999, 2);
+
+        // Custom logo — re-generate the logo HTML from the media site context
+        // so has_custom_logo() and get_custom_logo() work on subsites.
+        add_filter('get_custom_logo', $self->filterCustomLogo(...), 0);
+
+        // Upload dir — when plugins call wp_upload_dir() to manually build URLs,
+        // return the media site's upload path so URLs resolve correctly.
+        add_filter('upload_dir', $self->filterUploadDir(...), 0);
     }
 
     /**
@@ -421,5 +435,183 @@ class MediaSwitcher {
 
         // 'exist' is a primitive cap that any logged-in user has — effectively grants access.
         return $user_has_permission ? ['exist'] : $caps;
+    }
+
+    /**
+     * Filters the attachment URL to resolve from the media site.
+     *
+     * Many themes and plugins call wp_get_attachment_url() directly. Without
+     * this filter, they get an empty string because the attachment ID doesn't
+     * exist on the current (local) site.
+     *
+     * @param  string  $url  The attachment URL.
+     * @param  int  $attachment_id  Attachment post ID.
+     */
+    public function filterAttachmentUrl(string $url, int $attachment_id): string {
+        // Static guard prevents infinite recursion.
+        static $switched = false;
+
+        if ($switched || is_media_site()) {
+            return $url;
+        }
+
+        // If we already got a valid URL, don't re-fetch. This happens when
+        // the attachment exists locally (e.g. during an upload switch context).
+        if ($url !== '' && !str_contains($url, '?attachment_id=')) {
+            return $url;
+        }
+
+        self::switchToMediaSite();
+
+        $switched  = true;
+        $media_url = wp_get_attachment_url($attachment_id);
+        $switched  = false;
+
+        restore_current_blog();
+
+        return $media_url ?: $url;
+    }
+
+    /**
+     * Filters attachment metadata to resolve from the media site.
+     *
+     * wp_get_attachment_metadata() returns empty/false for attachment IDs
+     * that don't exist on the current site. This re-fetches from the media site.
+     *
+     * @param  array|false  $data  Attachment metadata, or false.
+     * @param  int  $attachment_id  Attachment post ID.
+     */
+    public function filterAttachmentMetadata(array|false $data, int $attachment_id): array|false {
+        static $switched = false;
+
+        if ($switched || is_media_site()) {
+            return $data;
+        }
+
+        // If metadata already resolved, don't re-fetch.
+        if ($data !== false && $data !== []) {
+            return $data;
+        }
+
+        self::switchToMediaSite();
+
+        $switched = true;
+        $data     = wp_get_attachment_metadata($attachment_id);
+        $switched = false;
+
+        restore_current_blog();
+
+        return $data;
+    }
+
+    /**
+     * Filters the custom logo HTML to resolve images from the media site.
+     *
+     * get_custom_logo() calls wp_get_attachment_image() which goes through
+     * our wp_get_attachment_image_src filter. However, it also checks if the
+     * attachment exists locally via get_post(). This filter re-generates
+     * the logo HTML with the media site context if the default output is empty.
+     */
+    public function filterCustomLogo(string $html): string {
+        static $switched = false;
+
+        if ($switched || is_media_site()) {
+            return $html;
+        }
+
+        // If WP already generated valid HTML, our image_src filter handled it.
+        if ($html !== '') {
+            return $html;
+        }
+
+        $custom_logo_id = get_theme_mod('custom_logo');
+
+        if (empty($custom_logo_id)) {
+            return $html;
+        }
+
+        // Re-generate the logo HTML from the media site context.
+        self::switchToMediaSite();
+        $switched = true;
+
+        $image = wp_get_attachment_image(
+            $custom_logo_id,
+            'full',
+            false,
+            [
+                'class'   => 'custom-logo',
+                'loading' => false,
+            ],
+        );
+
+        $switched = false;
+        restore_current_blog();
+
+        if (empty($image)) {
+            return $html;
+        }
+
+        return sprintf(
+            '<a href="%1$s" class="custom-logo-link" rel="home">%2$s</a>',
+            esc_url(home_url('/')),
+            $image,
+        );
+    }
+
+    /**
+     * Filters the upload directory to return the media site's upload path.
+     *
+     * Some plugins call wp_upload_dir() to build attachment URLs manually
+     * instead of using wp_get_attachment_url(). Without this filter, those
+     * URLs point to the local site's upload directory, which is wrong.
+     *
+     * Only applies on frontend requests and non-upload admin contexts to
+     * avoid redirecting actual file uploads to the wrong location (uploads
+     * are already handled via the AJAX/REST hooks).
+     *
+     * @param  array  $dirs  Upload directory data.
+     */
+    public function filterUploadDir(array $dirs): array {
+        static $switched = false;
+
+        if ($switched || is_media_site()) {
+            return $dirs;
+        }
+
+        // Don't filter during actual uploads — those are already redirected
+        // to the media site via the AJAX/REST action hooks.
+        if ($this->isUploadContext()) {
+            return $dirs;
+        }
+
+        self::switchToMediaSite();
+        $switched   = true;
+        $media_dirs = wp_upload_dir();
+        $switched   = false;
+        restore_current_blog();
+
+        return $media_dirs;
+    }
+
+    /**
+     * Detects whether the current request is an upload operation.
+     *
+     * During uploads, the AJAX/REST hooks already switch to the media site,
+     * so we should NOT also filter upload_dir or it would double-switch.
+     */
+    private function isUploadContext(): bool {
+        if (wp_doing_ajax()) {
+            $action = $_REQUEST['action'] ?? '';
+
+            return in_array($action, [
+                'upload-attachment',
+                'image-editor',
+                'imgedit-preview',
+                'crop-image',
+            ], true);
+        }
+
+        // async-upload.php
+        return str_ends_with($_SERVER['SCRIPT_NAME'] ?? '', 'async-upload.php');
     }
 }

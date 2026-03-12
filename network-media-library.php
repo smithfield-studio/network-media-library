@@ -98,3 +98,14 @@ new ACF\FieldRendering;
 // wp_insert_post() validation. These classes re-save the ID after save.
 new Thumbnail\PostSaver;
 new Thumbnail\RestSaver;
+
+// Admin bar indicator: shows which site is the media library.
+new AdminBar;
+
+// Site Health integration: verifies the media site exists and is accessible.
+new HealthCheck;
+
+// WP-CLI commands: status and diagnostics.
+if (defined('WP_CLI') && WP_CLI) {
+    CLI::register();
+}
