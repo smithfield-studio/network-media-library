@@ -304,7 +304,12 @@ class MediaSwitcher {
             return $content;
         }
 
-        $post_type_object  = get_post_type_object($post->post_type);
+        $post_type_object = get_post_type_object($post->post_type);
+
+        if (!$post_type_object) {
+            return $content;
+        }
+
         $has_thumbnail_url = get_the_post_thumbnail_url($post_id) !== false;
 
         if ($has_thumbnail_url === false) {
@@ -433,7 +438,13 @@ class MediaSwitcher {
             }
 
             // Substitute edit_post because the attachment exists only on the network media site.
-            $cap = get_post_type_object($content->post_type)->cap->create_posts;
+            $post_type_object = get_post_type_object($content->post_type);
+
+            if (!$post_type_object) {
+                return $caps;
+            }
+
+            $cap = $post_type_object->cap->create_posts;
         }
 
         /*
