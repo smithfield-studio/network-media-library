@@ -1,83 +1,119 @@
 # Network Media Library
 
-Network Media Library is a plugin for WordPress Multisite which provides a central media library that's shared across all sites on the Multisite network.
+Network Media Library is a WordPress Multisite plugin that provides a central media library shared across all sites on the network.
 
-## Description
+This is a maintained fork of [humanmade/network-media-library](https://github.com/humanmade/network-media-library) (last meaningful upstream release: 2019). This fork includes bug fixes, modern PHP tooling, and a class-based architecture.
 
-This small plugin transparently shares media from one central media library site to all the other sites on the network. All media that's uploaded gets transparently directed to the central media site, and subsequently made available network-wide. Nothing is copied, cloned, synchronised, or mirrored, so for each file that's uploaded there's only one attachment and one copy of the file.
+## How it works
 
-## Minimum Requirements ##
+All media uploads are transparently redirected to a single designated "media site" on the network. Every other site queries and displays media from that central library. Nothing is copied, cloned, or synchronised — there's one attachment record and one file per upload.
 
-**PHP:** 7.0  
-**WordPress:** 4.9  
+This is particularly useful for multilingual multisite setups (e.g. WPML or Polylang with separate sites per language), where the primary language site acts as the media source for all translations.
+
+## Requirements
+
+- **PHP:** >= 8.4
+- **WordPress:** >= 6.0
+- **Multisite:** Required
 
 ## Installation
 
-The plugin is available as a [Composer package](https://packagist.org/packages/humanmade/network-media-library).
+```sh
+composer require smithfield-studio/network-media-library
+```
 
-    composer require humanmade/network-media-library
+The plugin should either be installed as a mu-plugin or network activated. It cannot be activated on individual sites.
 
-If you don't use Composer, install the plugin as you would normally.
+### Configuration
 
-The plugin should either be installed as a mu-plugin or network activated. It's a network plugin and therefore cannot be activated on individual sites on the network.
-
-Site ID `2` is used by default as the central media library. You should configure your media library site ID via the filter hook `network-media-library/site_id`:
+Site ID `2` is used by default as the central media library. Configure it via the `network-media-library/site_id` filter:
 
 ```php
-add_filter( 'network-media-library/site_id', function( $site_id ) {
-    return 123;
-} );
+// Use the primary site (site 1) as the media library — common for translation setups.
+add_filter('network-media-library/site_id', fn () => 1);
 ```
 
 ## Usage
 
-Use the media library on the sites on your network just as you would normally. All media will be transparently stored on and served from the chosen central media library site.
+Use the media library as you normally would. All media is transparently stored on and served from the central media site.
 
-Attachments can be deleted only from within the admin area of the central media library.
+Attachments can only be deleted from within the admin area of the central media site.
 
 ## Compatibility
 
-Network Media Library works transparently and seamlessly with all built-in WordPress media functionality, including uploading files, cropping images, inserting media into posts, and viewing attachments. Its functionality works with the site icon, site logo, background and header images, featured images, galleries, the audio and image widgets, and regular media management.
+Works with all built-in WordPress media functionality: uploading, cropping, inserting into posts, featured images, galleries, site icons/logos, background/header images, audio/image widgets, and regular media management.
 
-The plugin works with the block editor, the classic editor, the REST API, XML-RPC, and all standard Ajax endpoints for media management.
+Supports the block editor, classic editor, REST API, XML-RPC, and all standard Ajax media endpoints.
 
-Links to media from other sites mostly work, although there are a couple of edge case bugs in WordPress core that need to be fixed (I'll get to these soon).
+### Explicitly supported plugins
 
-Compatibility with third-party plugins is good, but not guaranteed. The following plugins and libraries are explicitly supported by Network Media Library:
+- [Advanced Custom Fields (ACF)](https://wordpress.org/plugins/advanced-custom-fields/) — image and file fields, including within repeaters
+- [Regenerate Thumbnails](https://wordpress.org/plugins/regenerate-thumbnails/)
+- [WP User Avatars](https://wordpress.org/plugins/wp-user-avatars/)
 
-* [Advanced Custom Fields](https://wordpress.org/plugins/advanced-custom-fields/)
-* [Regenerate Thumbnails](https://wordpress.org/plugins/regenerate-thumbnails/)
-* [WP User Avatars](https://wordpress.org/plugins/wp-user-avatars/)
+### Confirmed compatible
 
-The following plugins and libraries have been tested and confirmed as compatible out of the box:
+- [BuddyPress](https://wordpress.org/plugins/buddypress/)
+- [Extended CPTs](https://github.com/johnbillion/extended-cpts)
+- [Stream](https://wordpress.org/plugins/stream/)
+- [User Profile Picture](https://wordpress.org/plugins/metronet-profile-picture/)
 
-* [BuddyPress](https://wordpress.org/plugins/buddypress/)
-* [Extended CPTs](https://github.com/johnbillion/extended-cpts)
-* [Gutenberg](https://wordpress.org/plugins/gutenberg/)
-* [Stream](https://wordpress.org/plugins/stream/)
-* [User Profile Picture](https://wordpress.org/plugins/metronet-profile-picture/)
+## Changes from upstream
 
-I plan to fully test (and add support if necessary) many other plugins and libraries, including CMB2, Fieldmanager, and many gallery and media management plugins. Stay tuned for updates!
+This fork includes the following fixes and improvements over `humanmade/network-media-library`:
 
-## Screenshots
+- **Fixed double content image processing** — upstream removes `wp_make_content_images_responsive` which no longer exists in WP 5.5+, causing duplicate `srcset` processing. Now correctly removes `wp_filter_content_tags`.
+- **Fixed `get_current_screen()` fatal** — null check added (from upstream PR #91).
+- **Fixed brittle srcset URL rewriting** — replaced blind regex (`/sites\/\d+\//`) with proper URL resolution via `wp_get_upload_dir()`.
+- **Fixed `get_post()` null safety** — `admin_post_thumbnail_html` no longer fatals on missing posts.
+- **Fixed ACF repeater field cache collision** — value cache now keyed by field name + post ID, preventing stale data when the same field name appears multiple times in a repeater.
+- **Fixed unsanitized REST input** — `featured_media` from REST requests is now sanitized with `absint()`.
+- **Converted anonymous closures to named methods** — all hook callbacks are now removable by third-party code.
+- **Restructured into classes** with PSR-4 autoloading.
+- **Modern tooling** — Laravel Pint, Rector, PHPStan level 6, PHPUnit 11.
 
-There are no screenshots to show as Network Media Library operates transparently and introduces no new UI. Simply upload, manage, insert, and use your media as you would normally, and everything will operate through the central media library.
+## Development
+
+### Setup
+
+```sh
+composer install
+```
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `composer format` | Format code with Laravel Pint |
+| `composer format:check` | Check formatting without changes |
+| `composer phpstan` | Run PHPStan static analysis (level 6) |
+| `composer rector` | Run Rector automated refactoring |
+| `composer rector:dry` | Preview Rector changes without applying |
+| `composer test` | Run PHPUnit tests |
+
+### Architecture
+
+```
+network-media-library.php          Bootstrap, constants, get_site_id(), is_media_site()
+src/
+  MediaSwitcher.php                Core site-switching logic + all hook registrations
+  ACF/
+    ValueFilter.php                ACF image/file field value resolution
+    FieldRendering.php             ACF admin field rendering (file fields)
+  Thumbnail/
+    PostSaver.php                  Featured image persistence (classic editor)
+    RestSaver.php                  Featured image persistence (Gutenberg/REST)
+```
 
 ## License
 
-Good news, this plugin is free for everyone! Since it's released under the MIT, you can use it free of charge on your personal or commercial site.
+MIT. See [LICENSE](./LICENSE).
 
 ## History
 
-This plugin originally started life as a fork of the [Multisite Global Media plugin](https://github.com/bueltge/multisite-global-media) by Frank Bültge and Dominik Schilling at [Inpsyde](https://inpsyde.com/), but has since diverged entirely and retains little of the original functionality.
-
-The initial fork of this plugin was made as part of a client project at [Human Made](https://humanmade.com/). We build and manage high-performance WordPress websites for some of the largest publishers in the world.
-
-Hurrah for open source!
+This plugin started as a fork of the [Multisite Global Media plugin](https://github.com/bueltge/multisite-global-media) by Frank Bültge and Dominik Schilling at [Inpsyde](https://inpsyde.com/). The initial fork was made as part of a client project at [Human Made](https://humanmade.com/). This maintained fork is by [Smithfield Studio](https://smithfield.studio/).
 
 ## Alternatives
 
-If the Network Media Library plugin doesn't suit your needs, try these alternatives:
-
-* [Multisite Global Media](https://github.com/bueltge/multisite-global-media)
-* [Network Shared Media](https://wordpress.org/plugins/network-shared-media/)
+- [Multisite Global Media](https://github.com/bueltge/multisite-global-media)
+- [Network Shared Media](https://wordpress.org/plugins/network-shared-media/)
