@@ -168,7 +168,7 @@ class MediaSwitcher {
      * @param  string|array  $size  Size of image.
      * @param  bool  $icon  Whether the image should be treated as an icon.
      */
-    public function filterAttachmentImageSrc(array|false $image, int $attachment_id, string|array $size, bool $icon): array|false {
+    public function filterAttachmentImageSrc(array|false $image, int|string $attachment_id, string|array $size, bool $icon): array|false {
         // Static guard prevents infinite recursion: wp_get_attachment_image_src()
         // below triggers this same filter, so we bail on re-entry.
         static $switched = false;
@@ -191,7 +191,7 @@ class MediaSwitcher {
         self::switchToMediaSite();
 
         $switched          = true;
-        $image             = wp_get_attachment_image_src($attachment_id, $size, $icon);
+        $image             = wp_get_attachment_image_src((int) $attachment_id, $size, $icon);
         $switched          = false;
         $cache[$cache_key] = $image;
 
@@ -211,8 +211,8 @@ class MediaSwitcher {
      * @param  array  $image_meta  Image meta data.
      * @param  int  $attachment_id  Image attachment ID or 0.
      */
-    public function filterImageSrcset(array|false $sources, array $size_array, string $image_src, array $image_meta, int $attachment_id): array|false {
-        if (!$sources || is_media_site() || $attachment_id === 0) {
+    public function filterImageSrcset(array|false $sources, array $size_array, string $image_src, array $image_meta, int|string $attachment_id): array|false {
+        if (!$sources || is_media_site() || (int) $attachment_id === 0) {
             return $sources;
         }
 
@@ -475,7 +475,7 @@ class MediaSwitcher {
      * @param  string  $url  The attachment URL.
      * @param  int  $attachment_id  Attachment post ID.
      */
-    public function filterAttachmentUrl(string $url, int $attachment_id): string {
+    public function filterAttachmentUrl(string $url, int|string $attachment_id): string {
         // Static guard prevents infinite recursion.
         static $switched = false;
         static $cache    = [];
@@ -497,7 +497,7 @@ class MediaSwitcher {
         self::switchToMediaSite();
 
         $switched                = true;
-        $media_url               = wp_get_attachment_url($attachment_id);
+        $media_url               = wp_get_attachment_url((int) $attachment_id);
         $switched                = false;
         $cache[$attachment_id]   = $media_url ?: $url;
 
@@ -517,7 +517,7 @@ class MediaSwitcher {
      * @param  mixed  $data  Attachment metadata — array when found, '' or false when not.
      * @param  int  $attachment_id  Attachment post ID.
      */
-    public function filterAttachmentMetadata(mixed $data, int $attachment_id): mixed {
+    public function filterAttachmentMetadata(mixed $data, int|string $attachment_id): mixed {
         static $switched = false;
         static $cache    = [];
 
@@ -537,7 +537,7 @@ class MediaSwitcher {
         self::switchToMediaSite();
 
         $switched                = true;
-        $data                    = wp_get_attachment_metadata($attachment_id);
+        $data                    = wp_get_attachment_metadata((int) $attachment_id);
         $switched                = false;
         $cache[$attachment_id]   = $data;
 
@@ -560,7 +560,7 @@ class MediaSwitcher {
      * @param  bool  $icon  Whether it's a mime-type icon.
      * @param  array  $attr  Array of attribute values for the image markup.
      */
-    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, string|array $attr): string {
+    public function filterAttachmentImage(string $html, int|string $attachment_id, string|array $size, bool $icon, string|array $attr): string {
         static $switched = false;
         static $cache    = [];
 
@@ -582,7 +582,7 @@ class MediaSwitcher {
         self::switchToMediaSite();
 
         $switched   = true;
-        $media_html = wp_get_attachment_image($attachment_id, $size, $icon, is_array($attr) ? $attr : []);
+        $media_html = wp_get_attachment_image((int) $attachment_id, $size, $icon, is_array($attr) ? $attr : []);
         $switched   = false;
 
         restore_current_blog();
