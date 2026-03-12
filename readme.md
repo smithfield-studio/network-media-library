@@ -71,6 +71,13 @@ This fork includes the following fixes and improvements over `humanmade/network-
 - **Converted anonymous closures to named methods** — all hook callbacks are now removable by third-party code.
 - **Restructured into classes** with PSR-4 autoloading.
 - **Modern tooling** — Laravel Pint, Rector, PHPStan level 6, PHPUnit 11.
+- **Added `wp_get_attachment_url` filter** — themes/plugins calling `wp_get_attachment_url()` directly now resolve from the media site.
+- **Added `wp_get_attachment_metadata` filter** — themes/plugins calling `wp_get_attachment_metadata()` directly now resolve from the media site.
+- **Added custom logo support** — `has_custom_logo()` and `get_custom_logo()` now work correctly on subsites by re-generating logo HTML from the media site context.
+- **Added `upload_dir` filter** — plugins that call `wp_upload_dir()` to manually build attachment URLs now get the media site's upload path.
+- **Added admin bar indicator** — shows the media library site name and links to it from any site's admin.
+- **Added Site Health check** — verifies the configured media site exists and is accessible.
+- **Added WP-CLI commands** — `wp network-media-library status` for config info, `wp network-media-library verify-thumbnails` to find/fix broken featured image references.
 
 ## Development
 
@@ -97,12 +104,28 @@ composer install
 network-media-library.php          Bootstrap, constants, get_site_id(), is_media_site()
 src/
   MediaSwitcher.php                Core site-switching logic + all hook registrations
+  AdminBar.php                     Admin bar media site indicator
+  HealthCheck.php                  Site Health integration
+  CLI.php                          WP-CLI commands (status, verify-thumbnails)
   ACF/
     ValueFilter.php                ACF image/file field value resolution
     FieldRendering.php             ACF admin field rendering (file fields)
   Thumbnail/
     PostSaver.php                  Featured image persistence (classic editor)
     RestSaver.php                  Featured image persistence (Gutenberg/REST)
+```
+
+## WP-CLI
+
+```sh
+# Show media library configuration and status
+wp network-media-library status
+
+# Check for broken featured image references on the current site
+wp network-media-library verify-thumbnails
+
+# Fix broken references (removes invalid _thumbnail_id meta)
+wp network-media-library verify-thumbnails --fix
 ```
 
 ## License
