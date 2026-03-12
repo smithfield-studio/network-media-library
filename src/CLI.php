@@ -45,7 +45,7 @@ class CLI {
 
         WP_CLI::log('Network Media Library Status');
         WP_CLI::log('---');
-        WP_CLI::log(sprintf('Media site:     %s (ID %d)', $site->blogname, $site_id));
+        WP_CLI::log(sprintf('Media site:     %s (ID %d)', html_entity_decode($site->blogname), $site_id));
         WP_CLI::log(sprintf('Media site URL: %s', $site->siteurl));
         WP_CLI::log(sprintf('Current site:   ID %d%s', $current_site_id, $is_media_site ? ' (this is the media site)' : ''));
         WP_CLI::log(sprintf('Site status:    %s', $site->archived || $site->deleted ? 'INACTIVE' : 'Active'));
