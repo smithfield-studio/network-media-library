@@ -560,7 +560,7 @@ class MediaSwitcher {
      * @param  bool  $icon  Whether it's a mime-type icon.
      * @param  array  $attr  Array of attribute values for the image markup.
      */
-    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, array $attr): string {
+    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, string|array $attr): string {
         static $switched = false;
         static $cache    = [];
 
@@ -582,7 +582,7 @@ class MediaSwitcher {
         self::switchToMediaSite();
 
         $switched   = true;
-        $media_html = wp_get_attachment_image($attachment_id, $size, $icon, $attr);
+        $media_html = wp_get_attachment_image($attachment_id, $size, $icon, is_array($attr) ? $attr : []);
         $switched   = false;
 
         restore_current_blog();
