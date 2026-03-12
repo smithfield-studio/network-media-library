@@ -182,7 +182,7 @@ class MediaSwitcher {
             return $image;
         }
 
-        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size);
+        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0');
 
         if (isset($cache[$cache_key])) {
             return $cache[$cache_key];
@@ -573,7 +573,7 @@ class MediaSwitcher {
             return $html;
         }
 
-        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size);
+        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0');
 
         if (isset($cache[$cache_key])) {
             return $cache[$cache_key];

@@ -25,10 +25,15 @@ class HookRegistrationTest extends TestCase {
 
     #[DataProvider('expectedHookProvider')]
     public function test_hook_is_registered(string $hook_name): void {
-        $this->assertStringContainsString(
-            "'{$hook_name}'",
+        $pattern = sprintf(
+            '/add_(action|filter)\s*\(\s*\'%s\'/',
+            preg_quote($hook_name, '/'),
+        );
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
             $this->source,
-            "Hook '{$hook_name}' should be registered in MediaSwitcher.",
+            "Hook '{$hook_name}' should be registered in MediaSwitcher using add_action() or add_filter().",
         );
     }
 
