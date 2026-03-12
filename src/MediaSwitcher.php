@@ -168,10 +168,11 @@ class MediaSwitcher {
      * @param  string|array  $size  Size of image.
      * @param  bool  $icon  Whether the image should be treated as an icon.
      */
-    public function filterAttachmentImageSrc(array|false $image, int $attachment_id, string|array $size, bool $icon): array|false {
+    public function filterAttachmentImageSrc(array|false $image, int|string $attachment_id, string|array $size, bool $icon): array|false {
         // Static guard prevents infinite recursion: wp_get_attachment_image_src()
         // below triggers this same filter, so we bail on re-entry.
         static $switched = false;
+        static $cache    = [];
 
         if ($switched) {
             return $image;
@@ -181,11 +182,18 @@ class MediaSwitcher {
             return $image;
         }
 
+        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0');
+
+        if (isset($cache[$cache_key])) {
+            return $cache[$cache_key];
+        }
+
         self::switchToMediaSite();
 
-        $switched = true;
-        $image    = wp_get_attachment_image_src($attachment_id, $size, $icon);
-        $switched = false;
+        $switched          = true;
+        $image             = wp_get_attachment_image_src((int) $attachment_id, $size, $icon);
+        $switched          = false;
+        $cache[$cache_key] = $image;
 
         restore_current_blog();
 
@@ -197,23 +205,27 @@ class MediaSwitcher {
      *
      * Fix 3c: Use proper URL resolution instead of brittle regex.
      *
-     * @param  array  $sources  One or more arrays of source data.
+     * @param  array|false  $sources  One or more arrays of source data, or false from a prior filter.
      * @param  array  $size_array  Requested width and height values.
      * @param  string  $image_src  The 'src' of the image.
      * @param  array  $image_meta  Image meta data.
      * @param  int  $attachment_id  Image attachment ID or 0.
      */
-    public function filterImageSrcset(array $sources, array $size_array, string $image_src, array $image_meta, int $attachment_id): array {
-        if (is_media_site() || $attachment_id === 0) {
+    public function filterImageSrcset(array|false $sources, array $size_array, string $image_src, array $image_meta, int|string $attachment_id): array|false {
+        if (!$sources || is_media_site() || (int) $attachment_id === 0) {
             return $sources;
         }
 
         // Get the media site's upload base URL so we can reconstruct srcset URLs.
         // Subsites have /wp-content/uploads/sites/N/ paths; the media site may not.
-        switch_to_blog(get_site_id());
-        $upload_dir = wp_get_upload_dir();
-        $base_url   = $upload_dir['baseurl'];
-        restore_current_blog();
+        // Cached per-request since the base URL never changes.
+        static $base_url = null;
+
+        if ($base_url === null) {
+            switch_to_blog(get_site_id());
+            $base_url = wp_get_upload_dir()['baseurl'];
+            restore_current_blog();
+        }
 
         foreach ($sources as $key => $source) {
             // Extract just the filename (e.g. "photo-300x200.jpg") from the
@@ -292,7 +304,12 @@ class MediaSwitcher {
             return $content;
         }
 
-        $post_type_object  = get_post_type_object($post->post_type);
+        $post_type_object = get_post_type_object($post->post_type);
+
+        if (!$post_type_object) {
+            return $content;
+        }
+
         $has_thumbnail_url = get_the_post_thumbnail_url($post_id) !== false;
 
         if ($has_thumbnail_url === false) {
@@ -421,7 +438,13 @@ class MediaSwitcher {
             }
 
             // Substitute edit_post because the attachment exists only on the network media site.
-            $cap = get_post_type_object($content->post_type)->cap->create_posts;
+            $post_type_object = get_post_type_object($content->post_type);
+
+            if (!$post_type_object) {
+                return $caps;
+            }
+
+            $cap = $post_type_object->cap->create_posts;
         }
 
         /*
@@ -452,9 +475,10 @@ class MediaSwitcher {
      * @param  string  $url  The attachment URL.
      * @param  int  $attachment_id  Attachment post ID.
      */
-    public function filterAttachmentUrl(string $url, int $attachment_id): string {
+    public function filterAttachmentUrl(string $url, int|string $attachment_id): string {
         // Static guard prevents infinite recursion.
         static $switched = false;
+        static $cache    = [];
 
         if ($switched || is_media_site()) {
             return $url;
@@ -466,15 +490,20 @@ class MediaSwitcher {
             return $url;
         }
 
+        if (isset($cache[$attachment_id])) {
+            return $cache[$attachment_id];
+        }
+
         self::switchToMediaSite();
 
-        $switched  = true;
-        $media_url = wp_get_attachment_url($attachment_id);
-        $switched  = false;
+        $switched                = true;
+        $media_url               = wp_get_attachment_url((int) $attachment_id);
+        $switched                = false;
+        $cache[$attachment_id]   = $media_url ?: $url;
 
         restore_current_blog();
 
-        return $media_url ?: $url;
+        return $cache[$attachment_id];
     }
 
     /**
@@ -488,8 +517,9 @@ class MediaSwitcher {
      * @param  mixed  $data  Attachment metadata — array when found, '' or false when not.
      * @param  int  $attachment_id  Attachment post ID.
      */
-    public function filterAttachmentMetadata(mixed $data, int $attachment_id): mixed {
+    public function filterAttachmentMetadata(mixed $data, int|string $attachment_id): mixed {
         static $switched = false;
+        static $cache    = [];
 
         if ($switched || is_media_site()) {
             return $data;
@@ -500,11 +530,16 @@ class MediaSwitcher {
             return $data;
         }
 
+        if (isset($cache[$attachment_id])) {
+            return $cache[$attachment_id];
+        }
+
         self::switchToMediaSite();
 
-        $switched = true;
-        $data     = wp_get_attachment_metadata($attachment_id);
-        $switched = false;
+        $switched                = true;
+        $data                    = wp_get_attachment_metadata((int) $attachment_id);
+        $switched                = false;
+        $cache[$attachment_id]   = $data;
 
         restore_current_blog();
 
@@ -525,8 +560,9 @@ class MediaSwitcher {
      * @param  bool  $icon  Whether it's a mime-type icon.
      * @param  array  $attr  Array of attribute values for the image markup.
      */
-    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, array $attr): string {
+    public function filterAttachmentImage(string $html, int|string $attachment_id, string|array $size, bool $icon, string|array $attr): string {
         static $switched = false;
+        static $cache    = [];
 
         if ($switched || is_media_site()) {
             return $html;
@@ -537,15 +573,24 @@ class MediaSwitcher {
             return $html;
         }
 
+        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0');
+
+        if (isset($cache[$cache_key])) {
+            return $cache[$cache_key];
+        }
+
         self::switchToMediaSite();
 
         $switched   = true;
-        $media_html = wp_get_attachment_image($attachment_id, $size, $icon, $attr);
+        $media_html = wp_get_attachment_image((int) $attachment_id, $size, $icon, is_array($attr) ? $attr : []);
         $switched   = false;
 
         restore_current_blog();
 
-        return $media_html !== '' ? $media_html : $html;
+        $result             = $media_html !== '' ? $media_html : $html;
+        $cache[$cache_key]  = $result;
+
+        return $result;
     }
 
     /**

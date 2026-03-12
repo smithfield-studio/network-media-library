@@ -38,6 +38,8 @@ class CLI {
                 'Media site ID %d does not exist on this network.',
                 $site_id,
             ));
+
+            return; // WP_CLI::error() exits, but PHPStan doesn't know that.
         }
 
         $current_site_id = get_current_blog_id();
