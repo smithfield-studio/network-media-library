@@ -36,11 +36,11 @@ class ValueFilter {
      * Filters the return value when using field retrieval functions in ACF.
      *
      * @param  mixed  $value  The field value.
-     * @param  int|string  $post_id  The post ID for this value.
+     * @param  int|string|false  $post_id  The post ID for this value (false when no post context).
      * @param  array  $field  The field array.
      * @return mixed The updated value.
      */
-    public function filterLoadValue(mixed $value, int|string $post_id, array $field): mixed {
+    public function filterLoadValue(mixed $value, int|string|false $post_id, array $field): mixed {
         $image = $value;
 
         // On the frontend of non-media subsites, switch to the media site to
@@ -78,11 +78,11 @@ class ValueFilter {
      * wrong site.
      *
      * @param  mixed  $value  The field value.
-     * @param  int|string  $post_id  The post ID for this value.
+     * @param  int|string|false  $post_id  The post ID for this value (false when no post context).
      * @param  array  $field  The field array.
      * @return mixed The updated value.
      */
-    public function filterFormatValue(mixed $value, int|string $post_id, array $field): mixed {
+    public function filterFormatValue(mixed $value, int|string|false $post_id, array $field): mixed {
         $cache_key = $field['name'] . '_' . $post_id;
 
         return $this->value[$cache_key] ?? $value;

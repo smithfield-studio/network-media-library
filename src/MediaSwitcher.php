@@ -205,14 +205,14 @@ class MediaSwitcher {
      *
      * Fix 3c: Use proper URL resolution instead of brittle regex.
      *
-     * @param  array  $sources  One or more arrays of source data.
+     * @param  array|false  $sources  One or more arrays of source data, or false from a prior filter.
      * @param  array  $size_array  Requested width and height values.
      * @param  string  $image_src  The 'src' of the image.
      * @param  array  $image_meta  Image meta data.
      * @param  int  $attachment_id  Image attachment ID or 0.
      */
-    public function filterImageSrcset(array $sources, array $size_array, string $image_src, array $image_meta, int $attachment_id): array {
-        if (is_media_site() || $attachment_id === 0) {
+    public function filterImageSrcset(array|false $sources, array $size_array, string $image_src, array $image_meta, int $attachment_id): array|false {
+        if (!$sources || is_media_site() || $attachment_id === 0) {
             return $sources;
         }
 
@@ -549,7 +549,7 @@ class MediaSwitcher {
      * @param  bool  $icon  Whether it's a mime-type icon.
      * @param  array  $attr  Array of attribute values for the image markup.
      */
-    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, string|array $attr): string {
+    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, array $attr): string {
         static $switched = false;
         static $cache    = [];
 
