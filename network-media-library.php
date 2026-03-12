@@ -12,8 +12,8 @@
  *
  * @link      https://github.com/humanmade/network-media-library
  *
- * @author    John Blackbourn <john@johnblackbourn.com>, Dominik Schilling <d.schilling@inpsyde.com>, Frank Bültge <f.bueltge@inpsyde.com>
- * @copyright 2019 Human Made
+ * @author    Smithfield Studio <hello@smithfield.studio>
+ * @copyright 2019 Human Made, 2024 Smithfield Studio
  * @license   https://opensource.org/licenses/MIT
  *
  * Plugin Name: Network Media Library
@@ -21,8 +21,8 @@
  * Network:     true
  * Plugin URI:  https://github.com/humanmade/network-media-library
  * Version:     3.0.0
- * Author:      John Blackbourn, Dominik Schilling, Frank Bültge
- * Author URI:  https://github.com/humanmade/network-media-library/graphs/contributors
+ * Author:      Smithfield Studio
+ * Author URI:  https://smithfield.studio/
  * License:     MIT
  * License URI: ./LICENSE
  * Text Domain: network-media-library

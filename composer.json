@@ -7,19 +7,24 @@
     "license": "MIT",
     "authors": [
         {
+            "name": "Smithfield Studio",
+            "homepage": "https://smithfield.studio/",
+            "role": "Maintainer"
+        },
+        {
             "name": "John Blackbourn",
             "homepage": "https://johnblackbourn.com/",
-            "role": "Developer"
+            "role": "Original Developer"
         },
         {
             "name": "Dominik Schilling",
             "homepage": "https://dominikschilling.de/",
-            "role": "Developer"
+            "role": "Original Developer"
         },
         {
             "name": "Frank Bültge",
             "homepage": "https://bueltge.de",
-            "role": "Developer"
+            "role": "Original Developer"
         }
     ],
     "require": {
