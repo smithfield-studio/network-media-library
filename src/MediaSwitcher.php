@@ -93,6 +93,11 @@ class MediaSwitcher {
         // so has_custom_logo() and get_custom_logo() work on subsites.
         add_filter('get_custom_logo', $self->filterCustomLogo(...), 0);
 
+        // Attachment image output — safety net for srcset. If wp_get_attachment_image()
+        // produces an <img> without srcset (because metadata wasn't available locally),
+        // re-generate the entire tag from the media site context.
+        add_filter('wp_get_attachment_image', $self->filterAttachmentImage(...), 999, 5);
+
         // Upload dir — when plugins call wp_upload_dir() to manually build URLs,
         // return the media site's upload path so URLs resolve correctly.
         add_filter('upload_dir', $self->filterUploadDir(...), 0);
@@ -475,21 +480,23 @@ class MediaSwitcher {
     /**
      * Filters attachment metadata to resolve from the media site.
      *
-     * wp_get_attachment_metadata() returns empty/false for attachment IDs
-     * that don't exist on the current site. This re-fetches from the media site.
+     * wp_get_attachment_metadata() calls get_post_meta() which returns ''
+     * (empty string) when the attachment doesn't exist on the local site.
+     * WordPress then passes this to the filter. We detect any empty/falsy
+     * value and re-fetch from the media site where the attachment lives.
      *
-     * @param  array|false  $data  Attachment metadata, or false.
+     * @param  mixed  $data  Attachment metadata — array when found, '' or false when not.
      * @param  int  $attachment_id  Attachment post ID.
      */
-    public function filterAttachmentMetadata(array|false $data, int $attachment_id): array|false {
+    public function filterAttachmentMetadata(mixed $data, int $attachment_id): mixed {
         static $switched = false;
 
         if ($switched || is_media_site()) {
             return $data;
         }
 
-        // If metadata already resolved, don't re-fetch.
-        if ($data !== false && $data !== []) {
+        // If metadata already resolved (non-empty array), don't re-fetch.
+        if (!empty($data)) {
             return $data;
         }
 
@@ -502,6 +509,43 @@ class MediaSwitcher {
         restore_current_blog();
 
         return $data;
+    }
+
+    /**
+     * Filters the attachment image HTML to ensure srcset is present.
+     *
+     * When wp_get_attachment_image() runs on a subsite, it may produce an <img>
+     * with a correct src (via our filterAttachmentImageSrc) but no srcset
+     * (because metadata wasn't resolved in time). This safety net detects
+     * missing srcset and re-generates the full <img> from the media site.
+     *
+     * @param  string  $html  HTML img element or empty string on failure.
+     * @param  int  $attachment_id  Image attachment ID.
+     * @param  string|array  $size  Requested image size.
+     * @param  bool  $icon  Whether it's a mime-type icon.
+     * @param  array  $attr  Array of attribute values for the image markup.
+     */
+    public function filterAttachmentImage(string $html, int $attachment_id, string|array $size, bool $icon, array $attr): string {
+        static $switched = false;
+
+        if ($switched || is_media_site()) {
+            return $html;
+        }
+
+        // Only intervene if the HTML is missing srcset but has a src.
+        if ($html === '' || str_contains($html, 'srcset=')) {
+            return $html;
+        }
+
+        self::switchToMediaSite();
+
+        $switched   = true;
+        $media_html = wp_get_attachment_image($attachment_id, $size, $icon, $attr);
+        $switched   = false;
+
+        restore_current_blog();
+
+        return $media_html !== '' ? $media_html : $html;
     }
 
     /**
