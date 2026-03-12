@@ -75,7 +75,7 @@ This fork includes the following fixes and improvements over `humanmade/network-
 - **Added `wp_get_attachment_metadata` filter** — themes/plugins calling `wp_get_attachment_metadata()` directly now resolve from the media site.
 - **Added custom logo support** — `has_custom_logo()` and `get_custom_logo()` now work correctly on subsites by re-generating logo HTML from the media site context.
 - **Added `upload_dir` filter** — plugins that call `wp_upload_dir()` to manually build attachment URLs now get the media site's upload path.
-- **Added admin bar indicator** — shows the media library site name and links to it from any site's admin.
+- **Added media library notice** — shows an info notice on the Media Library page indicating which site media is shared from, with MultilingualPress support.
 - **Added Site Health check** — verifies the configured media site exists and is accessible.
 - **Added WP-CLI commands** — `wp network-media-library status` for config info, `wp network-media-library verify-thumbnails` to find/fix broken featured image references.
 
@@ -104,7 +104,7 @@ composer install
 network-media-library.php          Bootstrap, constants, get_site_id(), is_media_site()
 src/
   MediaSwitcher.php                Core site-switching logic + all hook registrations
-  AdminBar.php                     Admin bar media site indicator
+  AdminBar.php                     Media library page notice
   HealthCheck.php                  Site Health integration
   CLI.php                          WP-CLI commands (status, verify-thumbnails)
   ACF/
