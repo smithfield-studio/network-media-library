@@ -215,8 +215,7 @@ class MediaSwitcher {
      * under the same ID on the subsite, so the image's remaining lookups (alt text, MIME type, metadata) are
      * served from the cache. That only happens when the subsite has no post of its own with that ID:
      * wp_attachment_is_image() looks the ID up just before this filter runs, so an empty posts cache means it
-     * doesn't exist. With a persistent object cache the copies expire after a few minutes, so alt text edited
-     * on the media site isn't held on subsites for long.
+     * doesn't exist.
      *
      * @param  array|false  $downsize  False, unless an earlier filter has already resolved the image.
      * @param  mixed  $attachment_id  Image attachment ID, as passed to image_downsize() (may be null).
@@ -231,6 +230,8 @@ class MediaSwitcher {
             return $downsize;
         }
 
+        // Always sized on the media site: image size settings are per site, so a subsite would give the
+        // media site's files its own dimensions.
         $id        = (int) $attachment_id;
         $cache_key = $id . ':' . (is_array($size) ? implode('x', $size) : $size);
 
@@ -253,13 +254,85 @@ class MediaSwitcher {
         ['downsize' => $downsize, 'attachment' => $attachment, 'meta' => $meta] = $cache[$cache_key];
 
         if ($attachment !== null && wp_cache_get($id, 'posts') === false) {
-            $expire = wp_using_ext_object_cache() ? 5 * MINUTE_IN_SECONDS : 0;
-
-            wp_cache_set($id, $attachment, 'posts', $expire);
-            wp_cache_set($id, $meta, 'post_meta', $expire);
+            self::cacheLocally($id, $attachment, $meta);
         }
 
         return $downsize;
+    }
+
+    /**
+     * Loads attachments from the media site and caches them on this subsite in one go.
+     *
+     * Themes can call this with the attachment IDs a page is about to output, so lookups of those images
+     * on the subsite (alt text, MIME type, metadata) are served from the cache with a single switch to the
+     * media site. IDs the subsite has a post of its own for are left alone.
+     *
+     * @param  array<int|string>  $ids  Attachment IDs.
+     */
+    public static function primeAttachments(array $ids): void {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
+
+        if ($ids === []) {
+            return;
+        }
+
+        if (is_media_site()) {
+            _prime_post_caches($ids, false, true);
+
+            return;
+        }
+
+        // Load any posts of the subsite's own with these IDs, so they aren't shadowed.
+        _prime_post_caches($ids, false, false);
+        $ids = array_values(array_filter($ids, static fn (int $id): bool => wp_cache_get($id, 'posts') === false));
+
+        if ($ids === []) {
+            return;
+        }
+
+        self::switchToMediaSite();
+
+        _prime_post_caches($ids, false, true);
+        $found = [];
+
+        foreach ($ids as $id) {
+            $attachment = get_post($id);
+
+            if ($attachment instanceof WP_Post && $attachment->post_type === 'attachment') {
+                $meta       = wp_cache_get($id, 'post_meta');
+                $found[$id] = [$attachment, is_array($meta) ? $meta : []];
+            }
+        }
+
+        restore_current_blog();
+
+        foreach ($found as $id => [$attachment, $meta]) {
+            self::cacheLocally($id, $attachment, $meta);
+        }
+    }
+
+    /**
+     * Whether an attachment with this ID is already cached on the current site.
+     */
+    private static function resolvesLocally(int $id): bool {
+        $post = wp_cache_get($id, 'posts');
+
+        return is_object($post) && ($post->post_type ?? '') === 'attachment';
+    }
+
+    /**
+     * Caches the media site's attachment and meta under the same ID on the current site.
+     *
+     * With a persistent object cache the copies expire after a few minutes, so alt text edited on the media
+     * site isn't held on subsites for long.
+     *
+     * @param  array<string, mixed>  $meta  Raw post meta, as held in the post_meta cache group.
+     */
+    private static function cacheLocally(int $id, WP_Post $attachment, array $meta): void {
+        $expire = wp_using_ext_object_cache() ? 5 * MINUTE_IN_SECONDS : 0;
+
+        wp_cache_set($id, $attachment, 'posts', $expire);
+        wp_cache_set($id, $meta, 'post_meta', $expire);
     }
 
     /**
@@ -458,7 +531,8 @@ class MediaSwitcher {
      * to the media site first so attachment lookups resolve correctly.
      */
     public function makeContentImagesResponsive(string $content): string {
-        if (is_media_site()) {
+        // Nothing to do without images, so skip the switch (excerpts and text-only content).
+        if (!str_contains($content, '<img') || is_media_site()) {
             return $content;
         }
 
@@ -634,7 +708,7 @@ class MediaSwitcher {
             return $html;
         }
 
-        if (wp_cache_get((int) $attachment_id, 'posts') !== false) {
+        if (self::resolvesLocally((int) $attachment_id)) {
             return $html;
         }
 
@@ -728,6 +802,7 @@ class MediaSwitcher {
      */
     public function filterUploadDir(array $dirs): array {
         static $switched = false;
+        static $cache    = [];
 
         if ($switched || is_media_site()) {
             return $dirs;
@@ -739,13 +814,23 @@ class MediaSwitcher {
             return $dirs;
         }
 
+        // wp_upload_dir() runs this filter on every call (core caches before the filter, not after),
+        // and the media site's directories don't change within a request, so switch once per media site.
+        // Keyed on the site ID, as calls before a theme's network-media-library/site_id filter is added
+        // resolve against the default site.
+        $site_id = get_site_id();
+
+        if (isset($cache[$site_id])) {
+            return $cache[$site_id];
+        }
+
         self::switchToMediaSite();
-        $switched   = true;
-        $media_dirs = wp_upload_dir();
-        $switched   = false;
+        $switched         = true;
+        $cache[$site_id]  = wp_upload_dir();
+        $switched         = false;
         restore_current_blog();
 
-        return $media_dirs;
+        return $cache[$site_id];
     }
 
     /**

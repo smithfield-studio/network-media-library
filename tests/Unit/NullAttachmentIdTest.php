@@ -23,6 +23,12 @@ class NullAttachmentIdTest extends TestCase {
         $this->assertFalse((new MediaSwitcher)->filterAttachmentImageSrc(false, null, 'full', false));
     }
 
+    public function test_prime_attachments_ignores_empty_ids(): void {
+        MediaSwitcher::primeAttachments([null, 0, '', '0']);
+
+        $this->addToAssertionCount(1);
+    }
+
     public function test_attachment_image_accepts_null(): void {
         $this->assertSame('', (new MediaSwitcher)->filterAttachmentImage('', null, 'full', false, []));
     }
