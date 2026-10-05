@@ -45,6 +45,7 @@ class RecursionGuardTest extends TestCase {
     public static function methodsRequiringGuardProvider(): array {
         return [
             'filterAttachmentImageSrc' => ['filterAttachmentImageSrc'],
+            'filterImageDownsize'      => ['filterImageDownsize'],
             'adminPostThumbnailHtml'   => ['adminPostThumbnailHtml'],
             'filterAttachmentUrl'      => ['filterAttachmentUrl'],
             'filterAttachmentMetadata' => ['filterAttachmentMetadata'],
