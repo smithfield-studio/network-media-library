@@ -167,11 +167,11 @@ class MediaSwitcher {
      * Filters the image src result so its URL points to the network media library site.
      *
      * @param  array|false  $image  Either array with src, width & height, icon src, or false.
-     * @param  int  $attachment_id  Image attachment ID.
+     * @param  mixed  $attachment_id  Image attachment ID, as passed to wp_get_attachment_image_src() (may be null).
      * @param  string|array  $size  Size of image.
      * @param  bool  $icon  Whether the image should be treated as an icon.
      */
-    public function filterAttachmentImageSrc(array|false $image, int|string $attachment_id, string|array $size, bool $icon): array|false {
+    public function filterAttachmentImageSrc(array|false $image, mixed $attachment_id, string|array $size, bool $icon): array|false {
         // Static guard prevents infinite recursion: wp_get_attachment_image_src()
         // below triggers this same filter, so we bail on re-entry.
         static $switched = false;
@@ -181,7 +181,7 @@ class MediaSwitcher {
             return $image;
         }
 
-        if (is_media_site()) {
+        if (!is_numeric($attachment_id) || (int) $attachment_id <= 0 || is_media_site()) {
             return $image;
         }
 
@@ -219,15 +219,15 @@ class MediaSwitcher {
      * on the media site isn't held on subsites for long.
      *
      * @param  array|false  $downsize  False, unless an earlier filter has already resolved the image.
-     * @param  int|string  $attachment_id  Image attachment ID.
+     * @param  mixed  $attachment_id  Image attachment ID, as passed to image_downsize() (may be null).
      * @param  string|array  $size  Size of image.
      */
-    public function filterImageDownsize(array|false $downsize, int|string $attachment_id, string|array $size): array|false {
+    public function filterImageDownsize(array|false $downsize, mixed $attachment_id, string|array $size): array|false {
         // Static guard prevents infinite recursion: image_downsize() below triggers this same filter.
         static $switched = false;
         static $cache    = [];
 
-        if ($switched || $downsize !== false || is_media_site()) {
+        if ($switched || $downsize !== false || !is_numeric($attachment_id) || (int) $attachment_id <= 0 || is_media_site()) {
             return $downsize;
         }
 
@@ -616,26 +616,30 @@ class MediaSwitcher {
      * (because metadata wasn't resolved in time). This safety net detects
      * missing srcset and re-generates the full <img> from the media site.
      *
+     * When the attachment resolves on this site (filterImageDownsize() caches the media site's copy here),
+     * the local output is already complete, so it's kept rather than rendered a second time.
+     *
      * @param  string  $html  HTML img element or empty string on failure.
-     * @param  int  $attachment_id  Image attachment ID.
+     * @param  mixed  $attachment_id  Image attachment ID, as passed to wp_get_attachment_image() (may be null).
      * @param  string|array  $size  Requested image size.
      * @param  bool  $icon  Whether it's a mime-type icon.
      * @param  array  $attr  Array of attribute values for the image markup.
      */
-    public function filterAttachmentImage(string $html, int|string $attachment_id, string|array $size, bool $icon, string|array $attr): string {
+    public function filterAttachmentImage(string $html, mixed $attachment_id, string|array $size, bool $icon, string|array $attr): string {
         static $switched = false;
         static $cache    = [];
 
-        if ($switched || is_media_site()) {
-            return $html;
-        }
-
         // Only intervene if the HTML is missing srcset but has a src.
-        if ($html === '' || str_contains($html, 'srcset=')) {
+        if ($switched || $html === '' || str_contains($html, 'srcset=') || !is_numeric($attachment_id) || is_media_site()) {
             return $html;
         }
 
-        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0');
+        if (wp_cache_get((int) $attachment_id, 'posts') !== false) {
+            return $html;
+        }
+
+        // The attributes are part of the key: the same image can be output with a different class or alt.
+        $cache_key = $attachment_id . ':' . (is_array($size) ? implode('x', $size) : $size) . ':' . ($icon ? '1' : '0') . ':' . md5(serialize($attr));
 
         if (isset($cache[$cache_key])) {
             return $cache[$cache_key];
