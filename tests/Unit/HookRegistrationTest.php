@@ -63,6 +63,7 @@ class HookRegistrationTest extends TestCase {
 
             // Filters
             'map_meta_cap'                  => ['map_meta_cap'],
+            'image_downsize'                => ['image_downsize'],
             'wp_get_attachment_image_src'   => ['wp_get_attachment_image_src'],
             'wp_calculate_image_srcset'     => ['wp_calculate_image_srcset'],
             'post_gallery'                  => ['post_gallery'],

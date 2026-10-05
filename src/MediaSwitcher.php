@@ -57,6 +57,9 @@ class MediaSwitcher {
         // Support for the WP User Avatars plugin.
         add_action('wp_ajax_assign_wp_user_avatars_media', self::switchToMediaSite(...), 0);
 
+        // Image sizing: resolved on the media site before core looks the attachment up on the subsite.
+        add_filter('image_downsize', $self->filterImageDownsize(...), 10, 3);
+
         // Attachment image src.
         add_filter('wp_get_attachment_image_src', $self->filterAttachmentImageSrc(...), 999, 4);
 
@@ -198,6 +201,65 @@ class MediaSwitcher {
         restore_current_blog();
 
         return $image;
+    }
+
+    /**
+     * Sizes images on the media site before core looks them up on the subsite.
+     *
+     * On a subsite, image_downsize(), wp_get_attachment_image() and plugins such as Safe SVG look the
+     * attachment up in the subsite's own tables. It isn't there, and WordPress doesn't cache a post that
+     * wasn't found, so each of those lookups queries again (several per image) before the filters here fetch
+     * the result from the media site. The alt text also comes out empty, as it's read from local post meta.
+     *
+     * This returns the media site's image_downsize() result, then caches the media site's attachment and meta
+     * under the same ID on the subsite, so the image's remaining lookups (alt text, MIME type, metadata) are
+     * served from the cache. That only happens when the subsite has no post of its own with that ID:
+     * wp_attachment_is_image() looks the ID up just before this filter runs, so an empty posts cache means it
+     * doesn't exist. With a persistent object cache the copies expire after a few minutes, so alt text edited
+     * on the media site isn't held on subsites for long.
+     *
+     * @param  array|false  $downsize  False, unless an earlier filter has already resolved the image.
+     * @param  int|string  $attachment_id  Image attachment ID.
+     * @param  string|array  $size  Size of image.
+     */
+    public function filterImageDownsize(array|false $downsize, int|string $attachment_id, string|array $size): array|false {
+        // Static guard prevents infinite recursion: image_downsize() below triggers this same filter.
+        static $switched = false;
+        static $cache    = [];
+
+        if ($switched || $downsize !== false || is_media_site()) {
+            return $downsize;
+        }
+
+        $id        = (int) $attachment_id;
+        $cache_key = $id . ':' . (is_array($size) ? implode('x', $size) : $size);
+
+        if (!isset($cache[$cache_key])) {
+            self::switchToMediaSite();
+
+            $switched          = true;
+            $attachment        = get_post($id);
+            $is_attachment     = $attachment instanceof WP_Post && $attachment->post_type === 'attachment';
+            $cache[$cache_key] = [
+                'downsize'   => image_downsize($id, $size),
+                'attachment' => $is_attachment ? $attachment : null,
+                'meta'       => $is_attachment ? (get_post_meta($id) ?: []) : [],
+            ];
+            $switched          = false;
+
+            restore_current_blog();
+        }
+
+        ['downsize' => $downsize, 'attachment' => $attachment, 'meta' => $meta] = $cache[$cache_key];
+
+        if ($attachment !== null && wp_cache_get($id, 'posts') === false) {
+            $expire = wp_using_ext_object_cache() ? 5 * MINUTE_IN_SECONDS : 0;
+
+            wp_cache_set($id, $attachment, 'posts', $expire);
+            wp_cache_set($id, $meta, 'post_meta', $expire);
+        }
+
+        return $downsize;
     }
 
     /**

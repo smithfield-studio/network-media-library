@@ -71,6 +71,7 @@ This fork includes the following fixes and improvements over `humanmade/network-
 - **Converted anonymous closures to named methods** — all hook callbacks are now removable by third-party code.
 - **Restructured into classes** with PSR-4 autoloading.
 - **Modern tooling** — Laravel Pint, Rector, PHPStan level 6, PHPUnit 11.
+- **Fixed repeated attachment lookups on subsites**: images are now sized on the media site through `image_downsize`, before core looks the attachment up in the subsite's own tables. The media site's attachment and meta are cached under the same ID on the subsite for the rest of the request (a few minutes with a persistent object cache), so alt text, MIME type and metadata lookups no longer miss and query again for every image. Subsite images also get their alt text from the media library instead of an empty `alt`.
 - **Added `wp_get_attachment_url` filter** — themes/plugins calling `wp_get_attachment_url()` directly now resolve from the media site.
 - **Added `wp_get_attachment_metadata` filter** — themes/plugins calling `wp_get_attachment_metadata()` directly now resolve from the media site.
 - **Added custom logo support** — `has_custom_logo()` and `get_custom_logo()` now work correctly on subsites by re-generating logo HTML from the media site context.
