@@ -17,6 +17,13 @@ use WP_REST_Server;
  */
 class MediaSwitcher {
     /**
+     * Attachment IDs cacheLocally() added, by blog ID, removed at shutdown under a persistent object cache.
+     *
+     * @var array<int, int[]>
+     */
+    private static array $seeded = [];
+
+    /**
      * Register all hooks. Called once from the main plugin file.
      *
      * Priority 0 is used on action hooks to ensure site-switching happens
@@ -237,18 +244,20 @@ class MediaSwitcher {
 
         if (!isset($cache[$cache_key])) {
             self::switchToMediaSite();
+            $switched = true;
 
-            $switched          = true;
-            $attachment        = get_post($id);
-            $is_attachment     = $attachment instanceof WP_Post && $attachment->post_type === 'attachment';
-            $cache[$cache_key] = [
-                'downsize'   => image_downsize($id, $size),
-                'attachment' => $is_attachment ? $attachment : null,
-                'meta'       => $is_attachment ? (get_post_meta($id) ?: []) : [],
-            ];
-            $switched          = false;
-
-            restore_current_blog();
+            try {
+                $attachment        = get_post($id);
+                $is_attachment     = $attachment instanceof WP_Post && $attachment->post_type === 'attachment';
+                $cache[$cache_key] = [
+                    'downsize'   => image_downsize($id, $size),
+                    'attachment' => $is_attachment ? $attachment : null,
+                    'meta'       => $is_attachment ? (get_post_meta($id) ?: []) : [],
+                ];
+            } finally {
+                $switched = false;
+                restore_current_blog();
+            }
         }
 
         ['downsize' => $downsize, 'attachment' => $attachment, 'meta' => $meta] = $cache[$cache_key];
@@ -290,21 +299,23 @@ class MediaSwitcher {
             return;
         }
 
+        $found = [];
         self::switchToMediaSite();
 
-        _prime_post_caches($ids, false, true);
-        $found = [];
+        try {
+            _prime_post_caches($ids, false, true);
 
-        foreach ($ids as $id) {
-            $attachment = get_post($id);
+            foreach ($ids as $id) {
+                $attachment = get_post($id);
 
-            if ($attachment instanceof WP_Post && $attachment->post_type === 'attachment') {
-                $meta       = wp_cache_get($id, 'post_meta');
-                $found[$id] = [$attachment, is_array($meta) ? $meta : []];
+                if ($attachment instanceof WP_Post && $attachment->post_type === 'attachment') {
+                    $meta       = wp_cache_get($id, 'post_meta');
+                    $found[$id] = [$attachment, is_array($meta) ? $meta : []];
+                }
             }
+        } finally {
+            restore_current_blog();
         }
-
-        restore_current_blog();
 
         foreach ($found as $id => [$attachment, $meta]) {
             self::cacheLocally($id, $attachment, $meta);
@@ -321,18 +332,61 @@ class MediaSwitcher {
     }
 
     /**
-     * Caches the media site's attachment and meta under the same ID on the current site.
+     * Caches the media site's attachment and meta under the same ID on the current site, for this request.
      *
-     * With a persistent object cache the copies expire after a few minutes, so alt text edited on the media
-     * site isn't held on subsites for long.
+     * wp_cache_add() does nothing while cache additions are suspended, when an empty posts cache can't be
+     * trusted to mean the site has no post with this ID. Under a persistent object cache the copies are
+     * removed at shutdown (see forgetSeeded()), so a subsite post later given the ID is never read as the
+     * attachment and media site edits show straight away.
      *
      * @param  array<string, mixed>  $meta  Raw post meta, as held in the post_meta cache group.
      */
     private static function cacheLocally(int $id, WP_Post $attachment, array $meta): void {
-        $expire = wp_using_ext_object_cache() ? 5 * MINUTE_IN_SECONDS : 0;
+        // Short expiry as a backstop in case shutdown never runs.
+        $expire = wp_using_ext_object_cache() ? MINUTE_IN_SECONDS : 0;
 
-        wp_cache_set($id, $attachment, 'posts', $expire);
+        if (!wp_cache_add($id, $attachment, 'posts', $expire)) {
+            return;
+        }
+
+        // The site has no post with this ID, so any meta cached for it here is from a miss.
         wp_cache_set($id, $meta, 'post_meta', $expire);
+
+        if (!wp_using_ext_object_cache()) {
+            return;
+        }
+
+        self::$seeded[get_current_blog_id()][] = $id;
+
+        if (has_action('shutdown', [self::class, 'forgetSeeded']) === false) {
+            add_action('shutdown', [self::class, 'forgetSeeded'], PHP_INT_MAX);
+        }
+    }
+
+    /**
+     * Removes the attachments cacheLocally() added, so a persistent object cache doesn't keep them.
+     */
+    public static function forgetSeeded(): void {
+        $current = get_current_blog_id();
+
+        foreach (self::$seeded as $blog_id => $ids) {
+            if ($blog_id !== $current) {
+                switch_to_blog($blog_id);
+            }
+
+            try {
+                foreach (array_unique($ids) as $id) {
+                    wp_cache_delete($id, 'posts');
+                    wp_cache_delete($id, 'post_meta');
+                }
+            } finally {
+                if ($blog_id !== $current) {
+                    restore_current_blog();
+                }
+            }
+        }
+
+        self::$seeded = [];
     }
 
     /**
@@ -815,22 +869,29 @@ class MediaSwitcher {
         }
 
         // wp_upload_dir() runs this filter on every call (core caches before the filter, not after),
-        // and the media site's directories don't change within a request, so switch once per media site.
-        // Keyed on the site ID, as calls before a theme's network-media-library/site_id filter is added
-        // resolve against the default site.
-        $site_id = get_site_id();
+        // and the media site's directories don't change within a request, so switch once. Keyed on the
+        // site ID, as calls before a theme's network-media-library/site_id filter is added resolve against
+        // the default site, and on the registered upload_dir callbacks, which plugins add and remove.
+        global $wp_filter;
 
-        if (isset($cache[$site_id])) {
-            return $cache[$site_id];
+        $callbacks = isset($wp_filter['upload_dir']) ? array_map('array_keys', $wp_filter['upload_dir']->callbacks) : [];
+        $key       = get_site_id() . ':' . md5(serialize($callbacks));
+
+        if (isset($cache[$key])) {
+            return $cache[$key];
         }
 
         self::switchToMediaSite();
-        $switched         = true;
-        $cache[$site_id]  = wp_upload_dir();
-        $switched         = false;
-        restore_current_blog();
+        $switched = true;
 
-        return $cache[$site_id];
+        try {
+            $cache[$key] = wp_upload_dir();
+        } finally {
+            $switched = false;
+            restore_current_blog();
+        }
+
+        return $cache[$key];
     }
 
     /**
