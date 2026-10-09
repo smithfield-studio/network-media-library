@@ -80,6 +80,7 @@ This fork includes the following fixes and improvements over `humanmade/network-
 - **Restructured into classes** with PSR-4 autoloading.
 - **Modern tooling** — Laravel Pint, Rector, PHPStan level 6, PHPUnit 11.
 - **Fixed repeated attachment lookups on subsites**: images are now sized on the media site through `image_downsize`, before core looks the attachment up in the subsite's own tables. The media site's attachment and meta are cached under the same ID on the subsite for the rest of the request (with a persistent object cache they're removed at shutdown), so alt text, MIME type and metadata lookups no longer miss and query again for every image. Subsite images also get their alt text from the media library instead of an empty `alt`.
+- **Fixed ACF 6.8.7+ image validation on subsites**: image and gallery values are validated on the media site, so saving a subsite's fields no longer fails with "File must be a valid image." for every image.
 - **Fewer switches to the media site**: `upload_dir` is resolved once per request instead of on every `wp_upload_dir()` call, and content without images skips the switch in the responsive images filter. `MediaSwitcher::primeAttachments()` loads a page's attachments with a single switch.
 - **Added `wp_get_attachment_url` filter** — themes/plugins calling `wp_get_attachment_url()` directly now resolve from the media site.
 - **Added `wp_get_attachment_metadata` filter** — themes/plugins calling `wp_get_attachment_metadata()` directly now resolve from the media site.
@@ -120,6 +121,7 @@ src/
   ACF/
     ValueFilter.php                ACF image/file field value resolution
     FieldRendering.php             ACF admin field rendering (file fields)
+    FieldValidation.php            ACF image/gallery validation on the media site
   Thumbnail/
     PostSaver.php                  Featured image persistence (classic editor)
     RestSaver.php                  Featured image persistence (Gutenberg/REST)

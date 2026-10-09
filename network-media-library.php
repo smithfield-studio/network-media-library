@@ -20,7 +20,7 @@
  * Description: Network Media Library provides a central media library that's shared across all sites on the Multisite network.
  * Network:     true
  * Plugin URI:  https://github.com/humanmade/network-media-library
- * Version:     3.2.0
+ * Version:     3.3.0
  * Author:      Smithfield Studio
  * Author URI:  https://smithfield.studio/
  * License:     MIT
@@ -108,6 +108,7 @@ MediaSwitcher::bootstrap();
 // ACF integration: resolve image/file field values from the media site.
 new ACF\ValueFilter;
 new ACF\FieldRendering;
+new ACF\FieldValidation;
 
 // Featured image persistence: WP deletes cross-site thumbnail IDs during
 // wp_insert_post() validation. These classes re-save the ID after save.
